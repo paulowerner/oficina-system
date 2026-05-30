@@ -1106,33 +1106,133 @@ async function cancelarOsDetalhe(id, numero) {
 }
 
 async function fecharOsModal(id) {
+  const os = await GET(`/ordens/${id}`);
   openModal('Fechar Ordem de Serviço', `
-    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Ao fechar a OS, as comissões serão geradas e o estoque atualizado.</div>
-    <div class="row g-3">
-      <div class="col-md-4"><label class="form-label">KM de Saída</label><input type="number" class="form-control" id="fech_km" placeholder="0"></div>
-      <div class="col-md-4">
-        <label class="form-label">Forma de Pagamento</label>
-        <select class="form-select" id="fech_pgto">
-          <option value="">Selecione...</option>
-          <option>Dinheiro</option><option>Pix</option><option>Cartão de Crédito</option>
-          <option>Cartão de Débito</option><option>Transferência</option><option>A Prazo</option>
-        </select>
+    <!-- Resumo dos valores -->
+    <div class="p-3 mb-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
+      <div class="d-flex justify-content-between mb-1">
+        <span class="text-muted">Serviços</span><span>${R$(os.total_servicos)}</span>
       </div>
-      <div class="col-md-4 d-flex align-items-end">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="fech_pago">
-          <label class="form-check-label fw-semibold text-success">Pago</label>
+      <div class="d-flex justify-content-between mb-1">
+        <span class="text-muted">Peças</span><span>${R$(os.total_produtos)}</span>
+      </div>
+      <div class="d-flex justify-content-between mb-2 pb-2" style="border-bottom:1px dashed #dee2e6">
+        <span class="text-muted">Subtotal</span><span><strong>${R$(os.total_servicos + os.total_produtos)}</strong></span>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="text-danger">Desconto</span>
+        <span class="text-danger fw-bold" id="fech_desconto_display">- ${R$(os.desconto||0)}</span>
+      </div>
+      <div class="d-flex justify-content-between" style="font-size:1.2rem">
+        <span class="fw-bold">TOTAL</span>
+        <span class="fw-bold text-warning" id="fech_total_display">${R$(os.total_geral)}</span>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- Desconto -->
+      <div class="col-12">
+        <label class="form-label fw-semibold">Desconto</label>
+        <div class="input-group">
+          <select class="form-select" id="fech_desc_tipo" style="max-width:110px" onchange="calcularDescontoFech(${os.total_servicos + os.total_produtos}, ${os.total_geral})">
+            <option value="valor">R$ Valor</option>
+            <option value="percent">% Percent.</option>
+          </select>
+          <input type="number" step="0.01" min="0" class="form-control" id="fech_desc_input" value="${os.desconto||0}" placeholder="0" oninput="calcularDescontoFech(${os.total_servicos + os.total_produtos}, ${os.total_geral})">
         </div>
+      </div>
+
+      <!-- Forma de pagamento com botões visuais -->
+      <div class="col-12">
+        <label class="form-label fw-semibold">Forma de Pagamento *</label>
+        <div class="d-flex flex-wrap gap-2" id="fech_pgto_btns">
+          ${[
+            {v:'Pix',            icon:'bi-qr-code',       color:'#00a884'},
+            {v:'Dinheiro',       icon:'bi-cash-stack',    color:'#2ecc71'},
+            {v:'Cartão Débito',  icon:'bi-credit-card',   color:'#3498db'},
+            {v:'Cartão Crédito', icon:'bi-credit-card-2-front', color:'#9b59b6'},
+            {v:'Transferência',  icon:'bi-bank',          color:'#e67e22'},
+            {v:'A Prazo',        icon:'bi-calendar-check',color:'#e74c3c'},
+          ].map(p=>`
+            <button type="button" class="btn pgto-btn" data-valor="${p.v}"
+              style="border:2px solid #dee2e6;background:#fff;padding:.5rem .85rem;border-radius:10px;font-size:.82rem;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:80px"
+              onclick="selecionarPgto('${p.v}')">
+              <i class="bi ${p.icon}" style="font-size:1.2rem;color:${p.color}"></i>
+              <span>${p.v}</span>
+            </button>
+          `).join('')}
+        </div>
+        <input type="hidden" id="fech_pgto" value="">
+      </div>
+
+      <!-- KM saída -->
+      <div class="col-md-6">
+        <label class="form-label">KM de Saída</label>
+        <input type="number" class="form-control" id="fech_km" placeholder="0" value="${os.km_entrada||''}">
+      </div>
+
+      <!-- Pago? -->
+      <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="fech_pago" style="width:2.5em;height:1.3em" checked>
+          <label class="form-check-label fw-semibold ms-2 text-success" for="fech_pago">Pagamento recebido</label>
+        </div>
+      </div>
+
+      <!-- Observação financeira -->
+      <div class="col-12">
+        <label class="form-label">Observação do Pagamento</label>
+        <input class="form-control" id="fech_obs_pgto" placeholder="Ex: Pago 50% agora, restante em 30 dias...">
       </div>
     </div>
   `, `<button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-      <button class="btn btn-success" onclick="fecharOs(${id})"><i class="bi bi-check-circle me-1"></i>Confirmar Fechamento</button>`);
+      <button class="btn btn-success btn-lg" onclick="fecharOs(${id})"><i class="bi bi-check-circle me-1"></i>Fechar e Gerar Comissões</button>`, 'lg');
+}
+
+function selecionarPgto(valor) {
+  document.getElementById('fech_pgto').value = valor;
+  document.querySelectorAll('.pgto-btn').forEach(b => {
+    const sel = b.dataset.valor === valor;
+    b.style.borderColor   = sel ? '#f39c12' : '#dee2e6';
+    b.style.background    = sel ? '#fff8e1' : '#fff';
+    b.style.fontWeight    = sel ? '700' : '400';
+  });
+}
+
+function calcularDescontoFech(subtotal, totalAtual) {
+  const tipo  = document.getElementById('fech_desc_tipo').value;
+  const input = parseFloat(document.getElementById('fech_desc_input').value)||0;
+  const desc  = tipo === 'percent' ? subtotal * (input / 100) : input;
+  const total = Math.max(0, subtotal - desc);
+  document.getElementById('fech_desconto_display').textContent = `- ${R$(desc)}`;
+  document.getElementById('fech_total_display').textContent    = R$(total);
 }
 
 async function fecharOs(id) {
-  const body = { km_saida: document.getElementById('fech_km').value||null, forma_pagamento: document.getElementById('fech_pgto').value, pago: document.getElementById('fech_pago').checked };
-  try { await POST(`/ordens/${id}/fechar`, body); closeModal(); showToast('OS fechada com sucesso!'); showOsDetalhe(id); }
-  catch(e) { showToast(e.message,'danger'); }
+  const tipo     = document.getElementById('fech_desc_tipo').value;
+  const input    = parseFloat(document.getElementById('fech_desc_input').value)||0;
+  const pgto     = document.getElementById('fech_pgto').value;
+  const os       = await GET(`/ordens/${id}`);
+  const subtotal = os.total_servicos + os.total_produtos;
+  const desconto = tipo === 'percent' ? subtotal * (input / 100) : input;
+
+  if (!pgto) return showToast('Selecione a forma de pagamento','warning');
+
+  const body = {
+    km_saida:        document.getElementById('fech_km').value||null,
+    forma_pagamento: pgto,
+    pago:            document.getElementById('fech_pago').checked,
+  };
+
+  // Atualiza desconto antes de fechar
+  await PUT(`/ordens/${id}`, { ...os, desconto: Math.max(0, desconto) });
+
+  try {
+    await POST(`/ordens/${id}/fechar`, body);
+    closeModal();
+    showToast('OS fechada com sucesso!');
+    showOsDetalhe(id);
+  } catch(e) { showToast(e.message,'danger'); }
 }
 
 // ==================== FOTOS ====================

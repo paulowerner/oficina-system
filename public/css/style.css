@@ -428,6 +428,11 @@ body {
   #print-area { position: absolute; left: 0; top: 0; width: 100%; }
 }
 
+/* ========== PAGAMENTO BOTÕES ========== */
+.pgto-btn { transition: all .15s ease; cursor: pointer; }
+.pgto-btn:hover { border-color: #f39c12 !important; background: #fffde7 !important; }
+.pgto-btn:active { transform: scale(.96); }
+
 /* ========== FOTOS VEICULO ========== */
 .foto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; padding: 1rem; }
 .foto-item { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; cursor: pointer; }
