@@ -915,9 +915,13 @@ async function showOsDetalhe(id) {
   updateNav('ordens');
   showLoading();
   try {
-    const os = await GET(`/ordens/${id}`);
+    const [os, funcs, servicos_cat, produtos_cat] = await Promise.all([
+      GET(`/ordens/${id}`),
+      GET('/funcionarios'),
+      GET('/servicos'),
+      GET('/produtos'),
+    ]);
     const finalizada = ['concluida','cancelada'].includes(os.status);
-    const [funcs, servicos_cat, produtos_cat] = await Promise.all([GET('/funcionarios'), GET('/servicos'), GET('/produtos')]);
 
     document.getElementById('page-content').innerHTML = `
       <div class="page-header">
@@ -973,39 +977,108 @@ async function showOsDetalhe(id) {
       </div>
 
       <div class="row g-3">
+        <!-- COLUNA PRINCIPAL -->
         <div class="col-lg-8">
-          <!-- Serviços -->
+
+          <!-- ===== FOTOS DO VEÍCULO ===== -->
+          <div class="table-card mb-3">
+            <div class="section-header">
+              <div class="section-title"><i class="bi bi-camera-fill text-warning"></i> Fotos do Veículo</div>
+              ${!finalizada ? `
+              <label class="btn btn-sm btn-accent" style="cursor:pointer">
+                <i class="bi bi-camera me-1"></i>Tirar Foto
+                <input type="file" accept="image/*" capture="environment" style="display:none"
+                  onchange="uploadFoto(${id},this)">
+              </label>` : ''}
+            </div>
+            <div class="foto-grid" id="foto-grid-${id}">
+              ${(JSON.parse(os.fotos||'[]')).map(url=>`
+                <div class="foto-item" onclick="verFoto('${url}')">
+                  <img src="${url}" alt="Foto veículo">
+                  ${!finalizada ? `<button class="foto-del" onclick="event.stopPropagation();deletarFoto(${id},'${url}')"><i class="bi bi-x"></i></button>` : ''}
+                </div>
+              `).join('')}
+              ${!finalizada && !JSON.parse(os.fotos||'[]').length ? `
+              <label class="foto-add-btn foto-add-grande" style="cursor:pointer;grid-column:span 2;aspect-ratio:auto;padding:1.5rem;gap:.5rem">
+                <i class="bi bi-camera-fill" style="font-size:2rem"></i>
+                <span style="font-size:.9rem">Clique para fotografar o veículo</span>
+                <small class="text-muted">Comprove o estado na entrada</small>
+                <input type="file" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(${id},this)">
+              </label>` : ''}
+            </div>
+          </div>
+
+          <!-- ===== SERVIÇOS / MÃO DE OBRA ===== -->
           <div class="table-card mb-3">
             <div class="section-header">
               <div class="section-title"><i class="bi bi-gear"></i> Serviços / Mão de Obra</div>
-              ${!finalizada ? `<button class="btn btn-sm btn-accent" onclick="openAddServicoModal(${id})"><i class="bi bi-plus-lg me-1"></i>Adicionar</button>` : ''}
+              <span class="text-muted" style="font-size:.82rem">${R$(os.total_servicos)}</span>
             </div>
+
             ${os.servicos.length ? `
-            <table class="table table-sm">
-              <thead><tr><th>Descrição</th><th>Responsável</th><th>Comissão</th><th>Valor</th>${!finalizada ? '<th></th>' : ''}</tr></thead>
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Serviço</th><th>Responsável</th><th>Comissão</th><th>Valor</th>${!finalizada ? '<th style="width:40px"></th>' : ''}</tr></thead>
               <tbody>
                 ${os.servicos.map(s => `
                   <tr>
                     <td>${s.descricao}</td>
-                    <td>${s.funcionario_nome||'-'}</td>
-                    <td>${s.comissao_percentual}%${s.comissao_valor > 0 ? ` = ${R$(s.comissao_valor)}` : ''}</td>
+                    <td>${s.funcionario_nome||<span class="text-muted">-</span>}</td>
+                    <td><span class="comissao-badge">${s.comissao_percentual}%</span></td>
                     <td><strong>${R$(s.preco)}</strong></td>
-                    ${!finalizada ? `<td><button class="btn btn-sm btn-outline-danger" onclick="removeServico(${id},${s.id})"><i class="bi bi-trash"></i></button></td>` : ''}
+                    ${!finalizada ? `<td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeServico(${id},${s.id})"><i class="bi bi-trash"></i></button></td>` : ''}
                   </tr>
                 `).join('')}
               </tbody>
-            </table>` : '<div class="empty-state" style="padding:1.5rem"><i class="bi bi-gear d-block mb-2" style="font-size:1.5rem"></i>Nenhum serviço</div>'}
+            </table>` : `<div class="text-center text-muted py-3" style="font-size:.9rem"><i class="bi bi-gear d-block mb-1" style="font-size:1.5rem;opacity:.3"></i>Nenhum serviço adicionado</div>`}
+
+            ${!finalizada ? `
+            <!-- FORMULÁRIO INLINE ADD SERVIÇO -->
+            <div style="background:#f8f9fa;border-top:1px solid #e9ecef;padding:1rem">
+              <div class="fw-semibold mb-2" style="font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:#6c757d">
+                <i class="bi bi-plus-circle me-1 text-warning"></i>Adicionar Serviço
+              </div>
+              <div class="row g-2">
+                <div class="col-12">
+                  <select class="form-select form-select-sm" id="qs_select"
+                    onchange="preencherServicoInline(this)">
+                    <option value="">— Selecionar do catálogo —</option>
+                    ${servicos_cat.map(s=>`<option value="${s.id}" data-preco="${s.preco}" data-com="${s.comissao_percentual}" data-nome="${s.nome.replace(/"/g,'&quot;')}">${s.nome} — ${R$(s.preco)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="col-12 col-md-5">
+                  <input class="form-control form-control-sm" id="qs_desc" placeholder="Ou escreva a descrição do serviço...">
+                </div>
+                <div class="col-6 col-md-3">
+                  <select class="form-select form-select-sm" id="qs_func">
+                    <option value="">Responsável</option>
+                    ${funcs.map(f=>`<option value="${f.id}" data-com="${f.comissao_percentual}">${f.nome}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="col-4 col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">R$</span>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-sm" id="qs_preco" placeholder="0,00" value="0">
+                  </div>
+                </div>
+                <div class="col-2 col-md-2">
+                  <button class="btn btn-sm btn-accent w-100" onclick="qaAddServico(${id})">
+                    <i class="bi bi-plus-lg"></i>
+                  </button>
+                </div>
+              </div>
+            </div>` : ''}
           </div>
 
-          <!-- Produtos -->
-          <div class="table-card">
+          <!-- ===== PRODUTOS / PEÇAS ===== -->
+          <div class="table-card mb-3">
             <div class="section-header">
               <div class="section-title"><i class="bi bi-box-seam"></i> Produtos / Peças</div>
-              ${!finalizada ? `<button class="btn btn-sm btn-accent" onclick="openAddProdutoModal(${id})"><i class="bi bi-plus-lg me-1"></i>Adicionar</button>` : ''}
+              <span class="text-muted" style="font-size:.82rem">${R$(os.total_produtos)}</span>
             </div>
+
             ${os.produtos.length ? `
-            <table class="table table-sm">
-              <thead><tr><th>Descrição</th><th>Qtd</th><th>Unit.</th><th>Total</th>${!finalizada ? '<th></th>' : ''}</tr></thead>
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Produto</th><th>Qtd</th><th>Unit.</th><th>Total</th>${!finalizada ? '<th style="width:40px"></th>' : ''}</tr></thead>
               <tbody>
                 ${os.produtos.map(p => `
                   <tr>
@@ -1013,76 +1086,172 @@ async function showOsDetalhe(id) {
                     <td>${fNum(p.quantidade)} ${p.produto_unidade||''}</td>
                     <td>${R$(p.preco_unitario)}</td>
                     <td><strong>${R$(p.total)}</strong></td>
-                    ${!finalizada ? `<td><button class="btn btn-sm btn-outline-danger" onclick="removeProduto(${id},${p.id})"><i class="bi bi-trash"></i></button></td>` : ''}
+                    ${!finalizada ? `<td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeProduto(${id},${p.id})"><i class="bi bi-trash"></i></button></td>` : ''}
                   </tr>
                 `).join('')}
               </tbody>
-            </table>` : '<div class="empty-state" style="padding:1.5rem"><i class="bi bi-box-seam d-block mb-2" style="font-size:1.5rem"></i>Nenhuma peça</div>'}
-          </div>
+            </table>` : `<div class="text-center text-muted py-3" style="font-size:.9rem"><i class="bi bi-box-seam d-block mb-1" style="font-size:1.5rem;opacity:.3"></i>Nenhuma peça adicionada</div>`}
 
-          <!-- Fotos do Veículo -->
-          <div class="table-card">
-            <div class="section-header">
-              <div class="section-title"><i class="bi bi-camera"></i> Fotos do Veículo</div>
-            </div>
-            <div class="foto-grid" id="foto-grid-${id}">
-              ${(JSON.parse(os.fotos||'[]')).map(url=>`
-                <div class="foto-item" onclick="verFoto('${url}')">
-                  <img src="${url}" alt="Foto">
-                  ${!finalizada ? `<button class="foto-del" onclick="event.stopPropagation();deletarFoto(${id},'${url}')"><i class="bi bi-x"></i></button>` : ''}
-                </div>
-              `).join('')}
-              ${!finalizada ? `
-              <label class="foto-add-btn" title="Tirar foto ou selecionar">
-                <i class="bi bi-camera-fill"></i>
-                <span>Foto</span>
-                <input type="file" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(${id},this)">
-              </label>` : ''}
-            </div>
-          </div>
-        </div>
-
-        <!-- Totais -->
-        <div class="col-lg-4">
-          <div class="totals-card mb-3">
-            <div class="fw-bold mb-3" style="color:#495057"><i class="bi bi-receipt me-2"></i>Resumo Financeiro</div>
-            <div class="total-row"><span class="text-muted">Serviços</span><span>${R$(os.total_servicos)}</span></div>
-            <div class="total-row"><span class="text-muted">Produtos</span><span>${R$(os.total_produtos)}</span></div>
-            <div class="total-row"><span class="text-muted">Desconto</span><span class="text-danger">- ${R$(os.desconto)}</span></div>
-            <div class="total-row"><span>TOTAL GERAL</span><span>${R$(os.total_geral)}</span></div>
-            <div class="mt-3 pt-2 border-top">
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="text-muted" style="font-size:.85rem">Pagamento</span>
-                <span class="${os.pago ? 'text-success' : 'text-danger'} fw-bold">${os.pago ? '✅ PAGO' : '⏳ PENDENTE'}</span>
+            ${!finalizada ? `
+            <!-- FORMULÁRIO INLINE ADD PRODUTO -->
+            <div style="background:#f8f9fa;border-top:1px solid #e9ecef;padding:1rem">
+              <div class="fw-semibold mb-2" style="font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:#6c757d">
+                <i class="bi bi-plus-circle me-1 text-warning"></i>Adicionar Peça / Produto
               </div>
-              ${os.forma_pagamento ? `<div class="text-muted" style="font-size:.85rem">Forma: ${os.forma_pagamento}</div>` : ''}
+              <div class="row g-2">
+                <div class="col-12">
+                  <select class="form-select form-select-sm" id="qp_select"
+                    onchange="preencherProdutoInline(this)">
+                    <option value="">— Selecionar do estoque —</option>
+                    ${produtos_cat.map(p=>`<option value="${p.id}" data-preco="${p.preco_venda}" data-nome="${p.nome.replace(/"/g,'&quot;')}" data-un="${p.unidade}" data-est="${p.estoque_atual}">${p.nome} — Est: ${fNum(p.estoque_atual)} ${p.unidade} — ${R$(p.preco_venda)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="col-12 col-md-4">
+                  <input class="form-control form-control-sm" id="qp_desc" placeholder="Ou escreva o nome da peça...">
+                </div>
+                <div class="col-4 col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">Qtd</span>
+                    <input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="qp_qty" value="1" oninput="calcTotalInline()">
+                  </div>
+                </div>
+                <div class="col-4 col-md-2">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">R$</span>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-sm" id="qp_preco" placeholder="0,00" value="0" oninput="calcTotalInline()">
+                  </div>
+                </div>
+                <div class="col-4 col-md-2">
+                  <input class="form-control form-control-sm bg-white fw-bold text-center" id="qp_total" readonly value="R$ 0,00" style="color:#2ecc71">
+                </div>
+                <div class="col-12 col-md-2">
+                  <button class="btn btn-sm btn-accent w-100" onclick="qaAddProduto(${id})">
+                    <i class="bi bi-plus-lg me-1"></i>Adicionar
+                  </button>
+                </div>
+              </div>
+            </div>` : ''}
+          </div>
+
+        </div><!-- /col-lg-8 -->
+
+        <!-- COLUNA LATERAL: TOTAIS -->
+        <div class="col-lg-4">
+
+          <!-- Resumo financeiro -->
+          <div class="totals-card mb-3">
+            <div class="fw-bold mb-3" style="color:#495057"><i class="bi bi-receipt me-2"></i>Resumo</div>
+            <div class="total-row"><span class="text-muted">Serviços</span><span>${R$(os.total_servicos)}</span></div>
+            <div class="total-row"><span class="text-muted">Peças</span><span>${R$(os.total_produtos)}</span></div>
+            <div class="total-row"><span class="text-danger">Desconto</span><span class="text-danger">- ${R$(os.desconto)}</span></div>
+            <div class="total-row"><span class="fw-bold">TOTAL</span><span class="fw-bold text-warning" style="font-size:1.15rem">${R$(os.total_geral)}</span></div>
+            <div class="mt-3 pt-2 border-top d-flex justify-content-between align-items-center">
+              <span class="text-muted" style="font-size:.85rem">${os.forma_pagamento||'Pagamento'}</span>
+              <span class="fw-bold ${os.pago ? 'text-success' : 'text-danger'}">${os.pago ? '✅ PAGO' : '⏳ PENDENTE'}</span>
             </div>
           </div>
 
-          ${!finalizada ? `
-          <div class="totals-card">
-            <div class="fw-bold mb-3" style="color:#495057"><i class="bi bi-pencil me-2"></i>Ajustes</div>
-            <div class="mb-2"><label class="form-label mb-1">Desconto (R$)</label>
-              <input type="number" step="0.01" min="0" class="form-control form-control-sm" id="os_desconto" value="${os.desconto||0}" onchange="atualizarDesconto(${id},this.value)">
-            </div>
-          </div>` : ''}
-
+          <!-- Comissões geradas -->
           ${os.servicos.filter(s=>s.comissao_percentual>0).length ? `
-          <div class="totals-card mt-3">
-            <div class="fw-bold mb-3" style="color:#495057"><i class="bi bi-cash-coin me-2 text-warning"></i>Comissões</div>
-            ${os.servicos.filter(s=>s.comissao_percentual>0).map(s => `
+          <div class="totals-card mb-3">
+            <div class="fw-bold mb-2" style="color:#495057"><i class="bi bi-cash-coin me-2 text-warning"></i>Comissões</div>
+            ${os.servicos.filter(s=>s.comissao_percentual>0).map(s=>`
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <div>
-                  <div style="font-size:.85rem;font-weight:600">${s.funcionario_nome||'N/A'}</div>
-                  <div style="font-size:.78rem;color:#6c757d">${s.descricao}</div>
+                  <div style="font-size:.85rem;font-weight:600">${s.funcionario_nome||'—'}</div>
+                  <div style="font-size:.75rem;color:#6c757d">${s.descricao}</div>
                 </div>
-                <span class="comissao-badge">${s.comissao_percentual}% = ${R$(s.preco * s.comissao_percentual / 100)}</span>
+                <span class="comissao-badge">${s.comissao_percentual}% = ${R$(s.preco*s.comissao_percentual/100)}</span>
               </div>
             `).join('')}
           </div>` : ''}
+
         </div>
       </div>
     `;
+  } catch(e) { showToast(e.message,'danger'); }
+}
+
+// ===== INLINE ADD: SERVIÇO =====
+function preencherServicoInline(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!sel.value) return;
+  document.getElementById('qs_desc').value  = opt.dataset.nome;
+  document.getElementById('qs_preco').value = opt.dataset.preco;
+  // Preenche comissão do funcionário se vazio
+  const fsel = document.getElementById('qs_func');
+  if (!fsel.value) return;
+  // deixa o campo livre para o user ajustar
+}
+
+async function qaAddServico(osId) {
+  const sel    = document.getElementById('qs_select');
+  const desc   = document.getElementById('qs_desc').value.trim();
+  const funcEl = document.getElementById('qs_func');
+  const preco  = parseFloat(document.getElementById('qs_preco').value)||0;
+  const funcId = funcEl.value||null;
+
+  if (!desc && !sel.value) return showToast('Selecione um serviço ou escreva a descrição','warning');
+
+  // Comissão: pega do serviço do catálogo, senão do funcionário
+  let comPct = 0;
+  if (sel.value) {
+    const opt = sel.options[sel.selectedIndex];
+    comPct = parseFloat(opt.dataset.com)||0;
+  }
+  if (!comPct && funcId) {
+    const fopt = funcEl.options[funcEl.selectedIndex];
+    comPct = parseFloat(fopt.dataset.com)||0;
+  }
+
+  const body = {
+    servico_id: sel.value||null,
+    funcionario_id: funcId,
+    descricao: desc || sel.options[sel.selectedIndex].dataset.nome,
+    preco,
+    comissao_percentual: comPct,
+  };
+  try {
+    await POST(`/ordens/${osId}/servicos`, body);
+    showToast('Serviço adicionado!');
+    showOsDetalhe(osId);
+  } catch(e) { showToast(e.message,'danger'); }
+}
+
+// ===== INLINE ADD: PRODUTO =====
+function preencherProdutoInline(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!sel.value) return;
+  document.getElementById('qp_desc').value  = opt.dataset.nome;
+  document.getElementById('qp_preco').value = opt.dataset.preco;
+  calcTotalInline();
+}
+
+function calcTotalInline() {
+  const qty   = parseFloat(document.getElementById('qp_qty')?.value)||0;
+  const preco = parseFloat(document.getElementById('qp_preco')?.value)||0;
+  const el = document.getElementById('qp_total');
+  if (el) el.value = R$(qty * preco);
+}
+
+async function qaAddProduto(osId) {
+  const sel   = document.getElementById('qp_select');
+  const desc  = document.getElementById('qp_desc').value.trim();
+  const qty   = parseFloat(document.getElementById('qp_qty').value)||1;
+  const preco = parseFloat(document.getElementById('qp_preco').value)||0;
+
+  if (!desc && !sel.value) return showToast('Selecione um produto ou escreva a descrição','warning');
+
+  const body = {
+    produto_id: sel.value||null,
+    descricao: desc || sel.options[sel.selectedIndex].dataset.nome,
+    quantidade: qty,
+    preco_unitario: preco,
+  };
+  try {
+    await POST(`/ordens/${osId}/produtos`, body);
+    showToast('Produto adicionado!');
+    showOsDetalhe(osId);
   } catch(e) { showToast(e.message,'danger'); }
 }
 
@@ -1604,40 +1773,117 @@ async function gerarRelFaturamento() {
   if (!di || !df) return showToast('Selecione o período','warning');
   try {
     const { totais, por_dia, top_servicos, top_produtos, por_funcionario } = await GET(`/relatorios/faturamento?data_inicio=${di}&data_fim=${df}`);
+    const maxBar = Math.max(...por_dia.map(d=>d.total), 1);
+
     document.getElementById('rel-fat-result').innerHTML = `
-      <div class="row g-3 mb-3">
-        <div class="col-md-3"><div class="stat-card"><div class="stat-value">${totais.total_os}</div><div class="stat-label">OSs Concluídas</div></div></div>
-        <div class="col-md-3"><div class="stat-card"><div class="stat-value text-success">${R$(totais.total_servicos)}</div><div class="stat-label">Total Serviços</div></div></div>
-        <div class="col-md-3"><div class="stat-card"><div class="stat-value text-primary">${R$(totais.total_produtos)}</div><div class="stat-label">Total Produtos</div></div></div>
-        <div class="col-md-3"><div class="stat-card"><div class="stat-value text-warning">${R$(totais.total_geral)}</div><div class="stat-label">Faturamento Total</div></div></div>
+      <!-- KPIs -->
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+          <div class="stat-card text-center">
+            <div class="stat-value">${totais.total_os}</div>
+            <div class="stat-label">OSs Concluídas</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card text-center">
+            <div class="stat-value" style="color:#27ae60">${R$(totais.total_servicos)}</div>
+            <div class="stat-label">Serviços</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card text-center">
+            <div class="stat-value" style="color:#2980b9">${R$(totais.total_produtos)}</div>
+            <div class="stat-label">Peças</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card text-center" style="border-color:#f39c12">
+            <div class="stat-value text-warning">${R$(totais.total_geral)}</div>
+            <div class="stat-label">TOTAL DO PERÍODO</div>
+          </div>
+        </div>
       </div>
-      <div class="row g-3">
+
+      <!-- Gráfico de barras por dia -->
+      ${por_dia.length ? `
+      <div class="table-card mb-4">
+        <div class="section-header"><div class="section-title"><i class="bi bi-bar-chart-line"></i> Faturamento por Dia</div></div>
+        <div class="p-3" style="overflow-x:auto">
+          <div style="display:flex;align-items:flex-end;gap:4px;min-height:120px;padding-bottom:24px;position:relative">
+            ${por_dia.map(d=>{
+              const pct = Math.round((d.total/maxBar)*100);
+              const dt  = d.dia.split('-').reverse().slice(0,2).join('/');
+              return `<div style="flex:1;min-width:28px;display:flex;flex-direction:column;align-items:center;gap:2px">
+                <div style="font-size:.65rem;color:#6c757d;writing-mode:horizontal-tb">${R$(d.total).replace('R$ ','')}</div>
+                <div style="height:${Math.max(4,pct)}px;background:linear-gradient(180deg,#f39c12,#e67e22);border-radius:4px 4px 0 0;width:100%" title="${dt}: ${R$(d.total)}"></div>
+                <div style="font-size:.6rem;color:#6c757d;margin-top:4px">${dt}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>` : ''}
+
+      <div class="row g-3 mb-4">
         <div class="col-md-6">
-          <div class="table-card">
+          <div class="table-card h-100">
             <div class="section-header"><div class="section-title"><i class="bi bi-gear"></i> Top Serviços</div></div>
-            <table class="table table-sm">
+            <table class="table table-sm mb-0">
               <thead><tr><th>Serviço</th><th class="text-end">Qtd</th><th class="text-end">Total</th></tr></thead>
-              <tbody>${top_servicos.map(s=>`<tr><td>${s.descricao}</td><td class="text-end">${s.qtd}</td><td class="text-end"><strong>${R$(s.total)}</strong></td></tr>`).join('')||'<tr><td colspan="3" class="text-center text-muted">Sem dados</td></tr>'}</tbody>
+              <tbody>
+                ${top_servicos.map(s=>`
+                  <tr>
+                    <td>${s.descricao}</td>
+                    <td class="text-end">${s.qtd}</td>
+                    <td class="text-end"><strong>${R$(s.total)}</strong></td>
+                  </tr>`).join('')||'<tr><td colspan="3" class="text-center text-muted py-3">Sem dados</td></tr>'}
+              </tbody>
             </table>
           </div>
         </div>
         <div class="col-md-6">
-          <div class="table-card">
-            <div class="section-header"><div class="section-title"><i class="bi bi-box-seam"></i> Top Produtos</div></div>
-            <table class="table table-sm">
+          <div class="table-card h-100">
+            <div class="section-header"><div class="section-title"><i class="bi bi-box-seam"></i> Top Peças / Produtos</div></div>
+            <table class="table table-sm mb-0">
               <thead><tr><th>Produto</th><th class="text-end">Qtd</th><th class="text-end">Total</th></tr></thead>
-              <tbody>${top_produtos.map(p=>`<tr><td>${p.descricao}</td><td class="text-end">${fNum(p.qtd_total)}</td><td class="text-end"><strong>${R$(p.total)}</strong></td></tr>`).join('')||'<tr><td colspan="3" class="text-center text-muted">Sem dados</td></tr>'}</tbody>
+              <tbody>
+                ${top_produtos.map(p=>`
+                  <tr>
+                    <td>${p.descricao}</td>
+                    <td class="text-end">${fNum(p.qtd_total)}</td>
+                    <td class="text-end"><strong>${R$(p.total)}</strong></td>
+                  </tr>`).join('')||'<tr><td colspan="3" class="text-center text-muted py-3">Sem dados</td></tr>'}
+              </tbody>
             </table>
           </div>
         </div>
-        <div class="col-12">
-          <div class="table-card">
-            <div class="section-header"><div class="section-title"><i class="bi bi-person-badge"></i> Por Funcionário</div></div>
-            <table class="table table-sm">
-              <thead><tr><th>Funcionário</th><th class="text-end">OSs</th><th class="text-end">Total Serviços</th><th class="text-end">Total Comissões</th></tr></thead>
-              <tbody>${por_funcionario.map(f=>`<tr><td><strong>${f.nome}</strong></td><td class="text-end">${f.qtd_os}</td><td class="text-end">${R$(f.total_servicos)}</td><td class="text-end text-warning">${R$(f.total_comissoes)}</td></tr>`).join('')||'<tr><td colspan="4" class="text-center text-muted">Sem dados</td></tr>'}</tbody>
-            </table>
-          </div>
+      </div>
+
+      <!-- Por colaborador — destaque -->
+      <div class="table-card">
+        <div class="section-header">
+          <div class="section-title"><i class="bi bi-person-badge"></i> Rendimento por Colaborador</div>
+        </div>
+        <div class="p-3">
+          ${por_funcionario.filter(f=>f.total_servicos>0).length ? por_funcionario.filter(f=>f.total_servicos>0).map(f=>{
+            const pct = Math.round((f.total_servicos / (totais.total_servicos||1)) * 100);
+            return `
+            <div class="mb-3 pb-3 border-bottom">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <div>
+                  <strong>${f.nome}</strong>
+                  <span class="text-muted ms-2" style="font-size:.8rem">${f.qtd_os} OS${f.qtd_os!==1?'s':''}</span>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold" style="color:#27ae60">${R$(f.total_servicos)}</div>
+                  <div style="font-size:.78rem;color:#f39c12">Comissão: ${R$(f.total_comissoes)}</div>
+                </div>
+              </div>
+              <div style="height:8px;background:#f0f2f5;border-radius:4px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#27ae60,#2ecc71);border-radius:4px;transition:width .5s"></div>
+              </div>
+              <div class="text-muted mt-1" style="font-size:.75rem">${pct}% dos serviços do período</div>
+            </div>`;
+          }).join('') : '<div class="text-center text-muted py-3">Sem dados de colaboradores no período</div>'}
         </div>
       </div>
     `;
