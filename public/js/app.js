@@ -932,6 +932,7 @@ async function showOsDetalhe(id) {
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm" onclick="imprimirOs(${id})"><i class="bi bi-printer me-1"></i>Imprimir</button>
+          <button class="btn btn-outline-danger btn-sm" onclick="baixarPdfOs(${id})"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
           <button class="btn btn-success btn-sm" onclick="compartilharWhatsApp(${id})" style="background:#25d366;border-color:#25d366"><i class="bi bi-whatsapp me-1"></i>WhatsApp</button>
           ${!finalizada ? `
             ${os.status === 'aberta' ? `<button class="btn btn-warning btn-sm text-white" onclick="mudarStatusOs(${id},'em_andamento')"><i class="bi bi-play-circle me-1"></i>Iniciar</button>` : ''}
@@ -1022,7 +1023,7 @@ async function showOsDetalhe(id) {
                 ${os.servicos.map(s => `
                   <tr>
                     <td>${s.descricao}</td>
-                    <td>${s.funcionario_nome||<span class="text-muted">-</span>}</td>
+                    <td>${s.funcionario_nome||'-'}</td>
                     <td><span class="comissao-badge">${s.comissao_percentual}%</span></td>
                     <td><strong>${R$(s.preco)}</strong></td>
                     ${!finalizada ? `<td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeServico(${id},${s.id})"><i class="bi bi-trash"></i></button></td>` : ''}
@@ -1554,6 +1555,174 @@ async function removeProduto(osId, itemId) {
   if (!confirm('Remover este produto?')) return;
   try { await DEL(`/ordens/${osId}/produtos/${itemId}`); showToast('Removido!'); showOsDetalhe(osId); }
   catch(e) { showToast(e.message,'danger'); }
+}
+
+function _htmlOs(os) {
+  const cfg = JSON.parse(localStorage.getItem('oficina_config')||'{}');
+  const fmt = v => 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.',',');
+  const fd  = s => s ? new Date(s).toLocaleDateString('pt-BR') : '-';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:13px;color:#000}
+    .topo{display:flex;justify-content:space-between;border-bottom:3px solid #e67e22;padding-bottom:10px;margin-bottom:15px}
+    .topo h1{font-size:20px;margin:0;color:#e67e22}
+    .topo h2{font-size:14px;margin:4px 0 0;color:#555}
+    .topo-info{text-align:right;font-size:12px;line-height:1.6;color:#555}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f9f9f9;padding:10px;border:1px solid #ddd;border-radius:4px;margin-bottom:12px}
+    .info-item label{font-weight:bold;font-size:10px;color:#888;display:block;text-transform:uppercase}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}
+    th{background:#1a2332;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
+    td{border-bottom:1px solid #eee;padding:6px 8px}
+    .totals{display:flex;flex-direction:column;align-items:flex-end;margin-top:8px}
+    .tot-row{display:flex;justify-content:space-between;width:260px;padding:4px 0;border-bottom:1px solid #eee;font-size:13px}
+    .tot-final{font-size:17px;font-weight:bold;color:#e67e22;border-top:2px solid #e67e22;padding-top:6px}
+    .pgto-box{margin-top:10px;background:#f0fff4;border:1px solid #b7ebc6;padding:8px 12px;border-radius:4px;font-size:12px}
+    .pgto-box strong{color:#27ae60}
+    .problema{background:#fff8e1;border:1px solid #ffe082;padding:8px 10px;border-radius:4px;margin-bottom:12px;font-size:12px}
+    .assinatura{display:flex;justify-content:space-between;margin-top:40px}
+    .ass-line{border-top:1px solid #000;width:200px;text-align:center;padding-top:5px;font-size:11px;color:#555}
+    .rodape{margin-top:20px;font-size:10px;color:#999;text-align:center;border-top:1px solid #eee;padding-top:8px}
+    @media print{body{padding:10px}}
+  </style></head><body>
+  <div class="topo">
+    <div>
+      <h1>ORDEM DE SERVIÇO</h1>
+      <h2>${cfg.nome||'Oficina'}</h2>
+      ${cfg.telefone ? `<div style="font-size:12px;color:#555">${cfg.telefone}</div>` : ''}
+      ${cfg.endereco ? `<div style="font-size:11px;color:#888">${cfg.endereco}</div>` : ''}
+    </div>
+    <div class="topo-info">
+      <div><strong>#${os.numero}</strong></div>
+      <div>${fd(os.data_entrada)}</div>
+      <div style="color:${os.status==='concluida'?'#27ae60':'#e67e22'};font-weight:bold">${STATUS_MAP[os.status]?.label||os.status}</div>
+      ${os.data_previsao ? `<div>Prev: ${fd(os.data_previsao)}</div>` : ''}
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item"><label>Cliente</label>${os.cliente_nome}</div>
+    <div class="info-item"><label>Telefone</label>${os.cliente_telefone||'-'}</div>
+    <div class="info-item"><label>Veículo</label>${os.placa} — ${os.marca||''} ${os.modelo||''} ${os.ano||''}</div>
+    <div class="info-item"><label>Cor / KM</label>${os.cor||os.veiculo_cor||'-'} / ${os.km_entrada ? parseInt(os.km_entrada).toLocaleString('pt-BR')+'km' : '-'}</div>
+    <div class="info-item"><label>Responsável</label>${os.funcionario_nome||'-'}</div>
+    <div class="info-item"><label>CNPJ/CPF</label>${cfg.cnpj||'-'}</div>
+  </div>
+  ${os.descricao_problema ? `<div class="problema"><strong>Problema relatado:</strong> ${os.descricao_problema}</div>` : ''}
+  <table>
+    <thead><tr><th>SERVIÇOS / MÃO DE OBRA</th><th>RESPONSÁVEL</th><th style="text-align:right">VALOR</th></tr></thead>
+    <tbody>
+      ${os.servicos.length ? os.servicos.map(s=>`<tr><td>${s.descricao}</td><td>${s.funcionario_nome||'-'}</td><td style="text-align:right">${fmt(s.preco)}</td></tr>`).join('') : '<tr><td colspan="3" style="color:#aaa;text-align:center">—</td></tr>'}
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th>PEÇAS / PRODUTOS</th><th style="text-align:right">QTD</th><th style="text-align:right">UNIT.</th><th style="text-align:right">TOTAL</th></tr></thead>
+    <tbody>
+      ${os.produtos.length ? os.produtos.map(p=>`<tr><td>${p.descricao}</td><td style="text-align:right">${parseFloat(p.quantidade).toFixed(2).replace('.',',')} ${p.produto_unidade||''}</td><td style="text-align:right">${fmt(p.preco_unitario)}</td><td style="text-align:right">${fmt(p.total)}</td></tr>`).join('') : '<tr><td colspan="4" style="color:#aaa;text-align:center">—</td></tr>'}
+    </tbody>
+  </table>
+  <div class="totals">
+    <div class="tot-row"><span>Serviços</span><span>${fmt(os.total_servicos)}</span></div>
+    <div class="tot-row"><span>Peças</span><span>${fmt(os.total_produtos)}</span></div>
+    ${os.desconto>0 ? `<div class="tot-row" style="color:#e74c3c"><span>Desconto</span><span>- ${fmt(os.desconto)}</span></div>` : ''}
+    <div class="tot-row tot-final"><span>TOTAL GERAL</span><span>${fmt(os.total_geral)}</span></div>
+  </div>
+  ${(os.forma_pagamento||os.pago) ? `
+  <div class="pgto-box">
+    ${os.forma_pagamento ? `💳 <strong>${os.forma_pagamento}</strong>` : ''}
+    &nbsp;&nbsp;
+    ${os.pago ? '✅ <strong style="color:#27ae60">PAGO</strong>' : '⏳ <strong style="color:#e74c3c">PENDENTE</strong>'}
+  </div>` : ''}
+  ${os.observacoes ? `<div style="margin-top:12px;font-size:12px;color:#555"><strong>Obs:</strong> ${os.observacoes}</div>` : ''}
+  <div class="assinatura">
+    <div class="ass-line">Assinatura do Cliente</div>
+    <div class="ass-line">Responsável Técnico</div>
+  </div>
+  ${cfg.rodape ? `<div class="rodape">${cfg.rodape}</div>` : ''}
+  </body></html>`;
+}
+
+function _htmlOrcamento(orc) {
+  const cfg = JSON.parse(localStorage.getItem('oficina_config')||'{}');
+  const fmt = v => 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.',',');
+  const fd  = s => s ? new Date(s).toLocaleDateString('pt-BR') : '-';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:13px;color:#000}
+    .topo{display:flex;justify-content:space-between;border-bottom:3px solid #2980b9;padding-bottom:10px;margin-bottom:15px}
+    .topo h1{font-size:20px;margin:0;color:#2980b9}
+    .topo h2{font-size:14px;margin:4px 0 0;color:#555}
+    .topo-info{text-align:right;font-size:12px;line-height:1.6;color:#555}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f9f9f9;padding:10px;border:1px solid #ddd;border-radius:4px;margin-bottom:12px}
+    .info-item label{font-weight:bold;font-size:10px;color:#888;display:block;text-transform:uppercase}
+    .validade{background:#fff8e1;border:1px solid #ffe082;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}
+    th{background:#2980b9;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
+    td{border-bottom:1px solid #eee;padding:6px 8px}
+    .totals{display:flex;flex-direction:column;align-items:flex-end}
+    .tot-row{display:flex;justify-content:space-between;width:260px;padding:4px 0;border-bottom:1px solid #eee;font-size:13px}
+    .tot-final{font-size:17px;font-weight:bold;color:#2980b9;border-top:2px solid #2980b9;padding-top:6px}
+    .assinatura{display:flex;justify-content:space-between;margin-top:40px}
+    .ass-line{border-top:1px solid #000;width:200px;text-align:center;padding-top:5px;font-size:11px;color:#555}
+    .rodape{margin-top:20px;font-size:10px;color:#999;text-align:center;border-top:1px solid #eee;padding-top:8px}
+  </style></head><body>
+  <div class="topo">
+    <div>
+      <h1>ORÇAMENTO</h1>
+      <h2>${cfg.nome||'Oficina'}</h2>
+      ${cfg.telefone ? `<div style="font-size:12px;color:#555">${cfg.telefone}</div>` : ''}
+      ${cfg.endereco ? `<div style="font-size:11px;color:#888">${cfg.endereco}</div>` : ''}
+    </div>
+    <div class="topo-info">
+      <div><strong>${orc.numero}</strong></div>
+      <div>${fd(orc.created_at)}</div>
+      <div style="font-weight:bold">${ORC_STATUS_MAP[orc.status]?.label||orc.status}</div>
+    </div>
+  </div>
+  ${orc.validade ? `<div class="validade">⚠️ <strong>Válido até: ${fd(orc.validade)}</strong></div>` : ''}
+  <div class="info-grid">
+    <div class="info-item"><label>Cliente</label>${orc.display_nome||orc.cliente_nome||'-'}</div>
+    <div class="info-item"><label>Telefone</label>${orc.display_telefone||orc.cliente_telefone||orc.telefone_prospect||'-'}</div>
+    <div class="info-item"><label>Veículo</label>${orc.placa ? `${orc.placa} — ${orc.marca||''} ${orc.modelo||''}` : (orc.veiculo_prospect||'-')}</div>
+    <div class="info-item"><label>Responsável</label>${orc.funcionario_nome||'-'}</div>
+  </div>
+  ${orc.descricao_problema ? `<div style="background:#f0f4ff;border:1px solid #c5d3f0;padding:8px 10px;border-radius:4px;margin-bottom:12px;font-size:12px"><strong>Solicitação:</strong> ${orc.descricao_problema}</div>` : ''}
+  <table>
+    <thead><tr><th>SERVIÇOS / MÃO DE OBRA</th><th style="text-align:right">VALOR</th></tr></thead>
+    <tbody>
+      ${orc.servicos.length ? orc.servicos.map(s=>`<tr><td>${s.descricao}</td><td style="text-align:right">${fmt(s.preco)}</td></tr>`).join('') : '<tr><td colspan="2" style="color:#aaa;text-align:center">—</td></tr>'}
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th>PEÇAS / PRODUTOS</th><th style="text-align:right">QTD</th><th style="text-align:right">UNIT.</th><th style="text-align:right">TOTAL</th></tr></thead>
+    <tbody>
+      ${orc.produtos.length ? orc.produtos.map(p=>`<tr><td>${p.descricao}</td><td style="text-align:right">${parseFloat(p.quantidade).toFixed(2).replace('.',',')}</td><td style="text-align:right">${fmt(p.preco_unitario)}</td><td style="text-align:right">${fmt(p.total)}</td></tr>`).join('') : '<tr><td colspan="4" style="color:#aaa;text-align:center">—</td></tr>'}
+    </tbody>
+  </table>
+  <div class="totals">
+    <div class="tot-row"><span>Serviços</span><span>${fmt(orc.total_servicos)}</span></div>
+    <div class="tot-row"><span>Peças</span><span>${fmt(orc.total_produtos)}</span></div>
+    ${orc.desconto>0 ? `<div class="tot-row" style="color:#e74c3c"><span>Desconto</span><span>- ${fmt(orc.desconto)}</span></div>` : ''}
+    <div class="tot-row tot-final"><span>TOTAL</span><span>${fmt(orc.total_geral)}</span></div>
+  </div>
+  ${orc.observacoes ? `<div style="margin-top:12px;font-size:12px;color:#555"><strong>Obs:</strong> ${orc.observacoes}</div>` : ''}
+  <div class="assinatura">
+    <div class="ass-line">Aprovação do Cliente</div>
+    <div class="ass-line">Responsável Técnico</div>
+  </div>
+  ${cfg.rodape ? `<div class="rodape">${cfg.rodape}</div>` : ''}
+  </body></html>`;
+}
+
+async function baixarPdfOs(id) {
+  try {
+    const os = await GET(`/ordens/${id}`);
+    const html = _htmlOs(os);
+    const el = document.createElement('div');
+    el.innerHTML = html.replace(/<!DOCTYPE.*?<body[^>]*>/s,'').replace(/<\/body>.*/s,'');
+    document.body.appendChild(el);
+    html2pdf().set({ margin:8, filename:`OS-${os.numero}.pdf`, image:{type:'jpeg',quality:.95}, html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(el).save().then(()=>document.body.removeChild(el));
+  } catch(e) { showToast(e.message,'danger'); }
 }
 
 async function imprimirOs(id) {
@@ -2115,6 +2284,7 @@ async function showOrcamentoDetalhe(id) {
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm" onclick="imprimirOrcamento(${id})"><i class="bi bi-printer me-1"></i>Imprimir</button>
+          <button class="btn btn-outline-danger btn-sm" onclick="baixarPdfOrc(${id})"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
           ${editavel ? `
             ${orc.status==='pendente' ? `<button class="btn btn-info btn-sm text-white" onclick="mudarStatusOrc(${id},'enviado')"><i class="bi bi-send me-1"></i>Marcar Enviado</button>` : ''}
             <button class="btn btn-outline-danger btn-sm" onclick="mudarStatusOrc(${id},'rejeitado')"><i class="bi bi-x-circle me-1"></i>Rejeitado</button>
@@ -2408,6 +2578,17 @@ async function removeOrcProduto(orcId, itemId) {
   if (!confirm('Remover?')) return;
   try { await DEL(`/orcamentos/${orcId}/produtos/${itemId}`); showOrcamentoDetalhe(orcId); }
   catch(e) { showToast(e.message,'danger'); }
+}
+
+async function baixarPdfOrc(id) {
+  try {
+    const orc = await GET(`/orcamentos/${id}`);
+    const html = _htmlOrcamento(orc);
+    const el = document.createElement('div');
+    el.innerHTML = html.replace(/<!DOCTYPE.*?<body[^>]*>/s,'').replace(/<\/body>.*/s,'');
+    document.body.appendChild(el);
+    html2pdf().set({ margin:8, filename:`ORC-${orc.numero}.pdf`, image:{type:'jpeg',quality:.95}, html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(el).save().then(()=>document.body.removeChild(el));
+  } catch(e) { showToast(e.message,'danger'); }
 }
 
 async function imprimirOrcamento(id) {
