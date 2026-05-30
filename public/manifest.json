@@ -1,0 +1,17 @@
+{
+  "name": "Oficina Pro",
+  "short_name": "Oficina Pro",
+  "description": "Sistema de Gestão para Oficina Mecânica",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1a2332",
+  "theme_color": "#f39c12",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%231a2332'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='%23f39c12'>🔧</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
