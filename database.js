@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const crypto = require('crypto');
 
 const db = new Database(path.join(__dirname, 'oficina.db'));
 db.pragma('journal_mode = WAL');
@@ -194,6 +195,15 @@ function initDatabase() {
       total REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nome TEXT,
+      ativo INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Migrations para banco existente
@@ -210,7 +220,16 @@ function initDatabase() {
     try { db.exec(sql); } catch (_) {}
   }
 
+  seedUsuarios();
   seedData();
+}
+
+function seedUsuarios() {
+  const count = db.prepare('SELECT COUNT(*) as c FROM usuarios').get();
+  if (count.c > 0) return;
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
+  db.prepare('INSERT INTO usuarios (username, password_hash, nome) VALUES (?,?,?)').run('admin', `${salt}:${hash}`, 'Administrador');
 }
 
 function seedData() {

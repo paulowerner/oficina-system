@@ -498,7 +498,7 @@ body {
     padding-bottom: 60px; /* space for bottom nav */
   }
 
-  .topbar { display: none !important; }
+  .topbar { padding: 0 0.75rem; }
   #bottom-nav { display: flex; }
   .fab { display: flex; }
 

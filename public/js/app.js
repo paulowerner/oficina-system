@@ -48,9 +48,18 @@ async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch('/api' + path, opts);
+  if (res.status === 401) {
+    window.location.href = '/login.html';
+    throw new Error('Sessão expirada');
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erro na requisição');
   return data;
+}
+
+async function logout() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
+  window.location.href = '/login.html';
 }
 const GET = p => api('GET', p);
 const POST = (p, b) => api('POST', p, b);
@@ -88,7 +97,16 @@ function updateNav(page) {
 }
 
 window.addEventListener('hashchange', handleRoute);
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const user = await GET('/auth/me');
+    const el = document.getElementById('topbar-user');
+    if (el) el.textContent = user.nome || '';
+  } catch {
+    window.location.href = '/login.html';
+    return;
+  }
+
   handleRoute();
   // Desktop sidebar toggle
   document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);

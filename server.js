@@ -2,11 +2,53 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const session = require('express-session');
+const crypto = require('crypto');
 const db = require('./database');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'oficina-pro-s3cr3t-2024',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 8 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' }
+}));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== AUTH ====================
+function verificarSenha(senha, stored) {
+  const [salt, hash] = stored.split(':');
+  return crypto.scryptSync(senha, salt, 64).toString('hex') === hash;
+}
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Usuário e senha obrigatórios' });
+  const user = db.prepare('SELECT * FROM usuarios WHERE username=? AND ativo=1').get(username.toLowerCase().trim());
+  if (!user || !verificarSenha(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Usuário ou senha incorretos' });
+  }
+  req.session.userId = user.id;
+  req.session.nome = user.nome || user.username;
+  res.json({ success: true, nome: req.session.nome });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy(() => {});
+  res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Não autenticado' });
+  res.json({ id: req.session.userId, nome: req.session.nome });
+});
+
+// Protege todas as rotas /api/* abaixo
+app.use('/api', (req, res, next) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Não autenticado' });
+  next();
+});
 
 // Upload de fotos
 const storage = multer.diskStorage({

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oficina Pro — Login</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    body {
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.1);
+    }
+    .login-icon {
+      width: 64px;
+      height: 64px;
+      background: #1a2332;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-size: 1.8rem;
+      color: #f39c12;
+    }
+    .form-control {
+      border-radius: 10px;
+      padding: .625rem .875rem;
+      font-size: 1rem;
+    }
+    .form-control:focus {
+      border-color: #f39c12;
+      box-shadow: 0 0 0 3px rgba(243,156,18,.15);
+    }
+    .btn-entrar {
+      background: #f39c12;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: .7rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .btn-entrar:hover { background: #d68910; color: #fff; }
+    .btn-entrar:disabled { background: #f3c263; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="text-center mb-4">
+      <div class="login-icon"><i class="bi bi-tools"></i></div>
+      <h4 class="fw-bold mb-1" style="color:#1a2332">Oficina Pro</h4>
+      <small class="text-muted">Sistema de Gestão</small>
+    </div>
+
+    <form id="loginForm" onsubmit="doLogin(event)">
+      <div class="mb-3">
+        <label class="form-label fw-semibold" style="font-size:.85rem;color:#495057">Usuário</label>
+        <input type="text" class="form-control" id="username" autocomplete="username" autofocus required>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold" style="font-size:.85rem;color:#495057">Senha</label>
+        <input type="password" class="form-control" id="password" autocomplete="current-password" required>
+      </div>
+      <div class="alert alert-danger py-2 mb-3" id="erro" style="display:none;font-size:.875rem;border-radius:10px"></div>
+      <button type="submit" class="btn btn-entrar w-100" id="btnLogin">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Entrar
+      </button>
+    </form>
+  </div>
+
+  <script>
+    fetch('/api/auth/me').then(r => { if (r.ok) window.location.href = '/'; }).catch(() => {});
+
+    async function doLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnLogin');
+      const erro = document.getElementById('erro');
+      erro.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Entrando...';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao fazer login');
+        window.location.href = '/';
+      } catch (err) {
+        erro.textContent = err.message;
+        erro.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Entrar';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -48,14 +48,20 @@
     <!-- Main Content -->
     <div id="main-content" class="flex-grow-1">
       <!-- Topbar -->
-      <nav class="topbar d-flex align-items-center justify-content-between px-4">
-        <button class="btn btn-sm btn-outline-secondary" id="sidebarToggle">
+      <nav class="topbar d-flex align-items-center justify-content-between px-3">
+        <button class="btn btn-sm btn-outline-secondary d-none d-md-flex" id="sidebarToggle">
           <i class="bi bi-list"></i>
         </button>
-        <div class="d-flex align-items-center gap-3">
-          <span id="topbar-title" class="fw-semibold text-muted">Dashboard</span>
+        <span class="fw-bold text-warning d-md-none" style="font-size:.9rem">
+          <i class="bi bi-tools me-1"></i>Oficina Pro
+        </span>
+        <span id="topbar-title" class="fw-semibold text-muted d-none d-md-block">Dashboard</span>
+        <div class="d-flex align-items-center gap-2">
+          <span id="topbar-user" class="text-muted d-none d-md-inline" style="font-size:.8rem"></span>
+          <button class="btn btn-sm btn-outline-danger" onclick="logout()" title="Sair">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
         </div>
-        <div></div>
       </nav>
 
       <!-- Pages Container -->
