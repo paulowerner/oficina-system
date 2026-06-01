@@ -521,8 +521,11 @@ body {
   }
 
   .filters-bar { gap: .5rem; }
+
+  /* font-size mínimo 16px em inputs para evitar zoom automático do iOS */
+  .form-control, .form-select,
   .filters-bar .form-control,
-  .filters-bar .form-select { font-size: .85rem; }
+  .filters-bar .form-select { font-size: 1rem; }
 
   #page-content { padding: 1rem !important; }
 
