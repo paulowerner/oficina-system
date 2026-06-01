@@ -18,6 +18,7 @@ body {
   background: #f0f2f5;
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
 }
 
 /* ========== SIDEBAR ========== */
@@ -509,36 +510,21 @@ body {
   .os-header-card { padding: 1rem; }
   .os-numero { font-size: 1.2rem; }
 
-  /* Tabelas em mobile viram cards */
-  .table-responsive-card thead { display: none; }
-  .table-responsive-card tbody tr {
-    display: block;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    margin-bottom: .5rem;
-    padding: .5rem;
-    background: #fff;
+  /* Tabelas: scroll horizontal em mobile */
+  .table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .table-responsive-card tbody td {
-    display: flex;
-    justify-content: space-between;
-    padding: .25rem .5rem;
-    border: none;
-    font-size: .85rem;
-  }
-  .table-responsive-card tbody td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: #6c757d;
-    font-size: .75rem;
-    text-transform: uppercase;
+
+  .table-card .table {
+    min-width: 480px;
   }
 
   .filters-bar { gap: .5rem; }
   .filters-bar .form-control,
   .filters-bar .form-select { font-size: .85rem; }
 
-  #page-content { padding: 1rem; }
+  #page-content { padding: 1rem !important; }
 
   .modal-dialog { margin: .5rem; }
 
